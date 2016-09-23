@@ -2,6 +2,7 @@
 import os, sys
 import ConfigParser
 import twitter
+import email
 
 class IridiumTwitterGateway:
 	def __init__(self):
@@ -16,10 +17,33 @@ class IridiumTwitterGateway:
 				input_encoding="utf-8"
 		)
 
-	def action_recv(self):
-		status=self.twitter.PostUpdate("How is it going?")
+	def process_sbd_message(self, msg):
+		msg=msg[:140] # truncate message if too long
+		print msg
+		status=self.twitter.PostUpdate(msg)
 		print "%s just posted: %s" % (status.user.name, status.text)
 
+	def action_recv(self):
+		print "Processing email..."
+		msg=email.message_from_file(sys.stdin)
+		if msg.get("To")!=self.config.get("sbd", "local_email"):
+			print "To not matching"
+			return
+		if msg.get("From")!="sbdservice@sbd.iridium.com":
+			print "From not matching"
+			return
+		if not msg.get("Subject").startswith("SBD Msg From Unit"):
+			print "Subject not matching"
+			return
+
+		for part in msg.get_payload():
+			if part.get("Content-Disposition").startswith("attachment;") and part.get_content_type().startswith("application/"):
+				print "Found twittermessage"
+				
+				self.process_sbd_message(part.get_payload(decode=True))
+				break
+		else:
+			print "No twitter message found"
 	def main(self):
 		self.config=ConfigParser.ConfigParser()
 		if len(sys.argv)!=3:
