@@ -3,6 +3,9 @@ import os, sys
 import ConfigParser
 import twitter
 import email
+import pysmile
+import subprocress
+import sqlite3
 
 class IridiumTwitterGateway:
 	def __init__(self):
@@ -17,12 +20,41 @@ class IridiumTwitterGateway:
 				input_encoding="utf-8"
 		)
 
-	def process_sbd_message(self, msg):
-		msg=msg[:140] # truncate message if too long
-		print msg
-		status=self.twitter.PostUpdate(msg)
-		print "%s just posted: %s" % (status.user.name, status.text)
+	def tw_upd(self, message):
+		status=self.twitter.PostUpdate(message)
+		#print "%s just posted: %s" % (status.user.name, status.text)
 
+	def tw_pm(self, user, message):
+		status=self.twitter.PostDirectMessage(message, user)
+
+	def sendmail(self, msg):
+		p = subprocess.Popen(["/usr/sbin/sendmail", "-t", "-oi"], stdin=PIPE)
+		p.communicate(msg)
+
+
+	def rtoken(self, token, nbytes):
+		
+
+
+
+	def process_sbd_message(self, msg):
+		#msg=msg[:140] # truncate message if too long
+		#print msg
+		#status=self.twitter.PostUpdate(msg)
+		#print "%s just posted: %s" % (status.user.name, status.text)
+		obj=pysmile.decode(msg)
+		for command in obj:
+			command, args=obj[0], obj[1:]
+			if command=="tw_upd":
+				self.tw_upd(args[0])
+			elif command=="tw_pm":
+				self.tw_pm(args[0], args[1])
+			elif command=="sendmail":
+				self.sendmail(args[0])
+			elif command=="rtoken":
+				self.rtoken(args[0], args[1])
+			else:
+				raise Exception("Unknown command encountered in message")
 	def action_recv(self):
 		print "Processing email..."
 		msg=email.message_from_file(sys.stdin)
@@ -44,6 +76,7 @@ class IridiumTwitterGateway:
 				break
 		else:
 			print "No twitter message found"
+			
 	def main(self):
 		self.config=ConfigParser.ConfigParser()
 		if len(sys.argv)!=3:
@@ -54,6 +87,7 @@ class IridiumTwitterGateway:
 		self.config.read(config_filename)
 
 		self.twitter=self.init_twitter_api()
+		self.db = sqlite3.connect(self.config.get("db", "filename"))
 
 		if action=="recv":
 			self.action_recv()
